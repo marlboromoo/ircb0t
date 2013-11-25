@@ -89,8 +89,9 @@ func (bot *IRCbot) Say(channel, message string) {
 	//bot.Writef("PRIVMSG %s :%s", channel, message)
 }
 
+// see: http://www.irchelp.org/irchelp/rfc/ctcpspec.html
 func (bot *IRCbot) Action(channel, message string) {
-	bot.noises <- fmt.Sprintf("PRIVMSG %s :ACTION %s", channel, message)
+	bot.noises <- fmt.Sprintf("PRIVMSG %s :\001ACTION %s\001", channel, message)
 	//bot.Writef("PRIVMSG %s :ACTION %s", channel, message)
 }
 
