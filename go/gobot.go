@@ -1,8 +1,9 @@
+// Package modules provides ...
 package main
 
 import (
     "fmt"
-    "ircbot"
+    "./ircbot"
 )
 
 //=============================================================================
@@ -30,6 +31,7 @@ func main() {
 	for i := range bot.Channels {
 		bot.Say(bot.Channels[i], fmt.Sprintf("Hello %s", bot.Channels[i]))
 		bot.Action(bot.Channels[i], "shake his body")
+		bot.Action(bot.Channels[i], "唱了一首歌.")
 	}
 
 	// run forever

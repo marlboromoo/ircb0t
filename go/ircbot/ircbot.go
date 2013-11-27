@@ -1,3 +1,4 @@
+// Package modules provides ...
 package ircbot
 
 import (
@@ -6,15 +7,16 @@ import (
 	"net"
 	"net/textproto"
 	"time"
+        "./module"
 )
 
 //=============================================================================
 // type
 //=============================================================================
 
-type IRCbot struct {
+type IRCBot struct {
 	//. IRC server
-	address string //server:port
+	address string "server:port"
 	//. Client infos
 	nickname   string
 	username   string
@@ -27,18 +29,18 @@ type IRCbot struct {
 	reader  *bufio.Reader
 	writer  *textproto.Writer
 	noises  chan string
-	modules []BotModule
+	modules []module.BotModule
 }
 
-type BotModule func(bot *IRCbot, msg string)
+//type BotModule func(bot *IRCBot, msg string)
 
 //=============================================================================
 // methods
 //=============================================================================
 
 func NewBot(address, nickname, username, realname string,
-	Channels []string) *IRCbot {
-	return &IRCbot{
+	Channels []string) *IRCBot {
+	return &IRCBot{
 		address:    address,
 		nickname:   nickname,
 		username:   username,
@@ -47,11 +49,11 @@ func NewBot(address, nickname, username, realname string,
 		realname:   realname,
 		Channels:   Channels,
 		noises:     make(chan string, 1000),
-		modules:    []BotModule{ModuleFoo},
+		modules:    []module.BotModule{module.ModuleFoo},
 	}
 }
 
-func (bot *IRCbot) Connect() {
+func (bot *IRCBot) Connect() {
 	conn, err := net.Dial("tcp", bot.address)
 	if err != nil {
 		fmt.Printf("Fail to connect to IRC server!\n")
@@ -62,40 +64,40 @@ func (bot *IRCbot) Connect() {
 	bot.writer = textproto.NewWriter(bufio.NewWriter(bot.conn))
 }
 
-func (bot *IRCbot) Disconnect() {
+func (bot *IRCBot) Disconnect() {
 	if bot.conn != nil {
 		bot.conn.Close()
 	}
 }
 
-func (bot *IRCbot) Writef(format string, args ...interface{}) {
+func (bot *IRCBot) Writef(format string, args ...interface{}) {
 	bot.writer.PrintfLine(format, args...)
 }
 
-func (bot *IRCbot) Identify() {
+func (bot *IRCBot) Identify() {
 	bot.Writef("USER %s %s %s :%s",
 		bot.nickname, bot.hostname, bot.servername, bot.realname)
 	bot.Writef("NICK %s", bot.nickname)
 }
 
-func (bot *IRCbot) JoinDefault() {
+func (bot *IRCBot) JoinDefault() {
 	for i := range bot.Channels {
 		bot.Writef("JOIN %s", bot.Channels[i])
 	}
 }
 
-func (bot *IRCbot) Say(channel, message string) {
+func (bot *IRCBot) Say(channel, message string) {
 	bot.noises <- fmt.Sprintf("PRIVMSG %s :%s", channel, message)
 	//bot.Writef("PRIVMSG %s :%s", channel, message)
 }
 
 // see: http://www.irchelp.org/irchelp/rfc/ctcpspec.html
-func (bot *IRCbot) Action(channel, message string) {
+func (bot *IRCBot) Action(channel, message string) {
 	bot.noises <- fmt.Sprintf("PRIVMSG %s :\001ACTION %s\001", channel, message)
 	//bot.Writef("PRIVMSG %s :ACTION %s", channel, message)
 }
 
-func (bot *IRCbot) ReadLine() string {
+func (bot *IRCBot) ReadLine() string {
 	var line_ []byte
 	for true {
 		line, isPrefix, _ := bot.reader.ReadLine()
@@ -107,7 +109,7 @@ func (bot *IRCbot) ReadLine() string {
 	return string(line_)
 }
 
-func (bot *IRCbot) Listen() {
+func (bot *IRCBot) Listen() {
 	for {
 		msg := bot.ReadLine()
 		fmt.Printf("%s\n", msg)
@@ -115,13 +117,13 @@ func (bot *IRCbot) Listen() {
 	}
 }
 
-func (bot *IRCbot) Process(msg string) {
+func (bot *IRCBot) Process(msg string) {
 	for _, module := range bot.modules {
 		module(bot, msg)
 	}
 }
 
-func (bot *IRCbot) MakeNoise() {
+func (bot *IRCBot) MakeNoise() {
 	for {
 		msg := <-bot.noises
 		time.Sleep(time.Duration(time.Second * 3))
@@ -129,14 +131,18 @@ func (bot *IRCbot) MakeNoise() {
 	}
 }
 
+func (bot *IRCBot) GetChannels() []string {
+    return bot.Channels
+}
+
 //=============================================================================
-// funtions (module for IRCbot)
+// funtions (module for IRCBot)
 //=============================================================================
 
-func ModuleFoo(bot *IRCbot, msg string) {
-	for i := range bot.Channels {
-		bot.Say(bot.Channels[i], msg)
-		break
-	}
-}
+//func ModuleFoo(bot *IRCBot, msg string) {
+//	for i := range bot.Channels {
+//		bot.Say(bot.Channels[i], msg)
+//		break
+//	}
+//}
 
