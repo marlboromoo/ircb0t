@@ -33,7 +33,6 @@ type IRCBot struct {
 	modules map[string]reflect.Value
 }
 
-
 //=============================================================================
 // methods
 //=============================================================================
@@ -119,10 +118,16 @@ func (bot *IRCBot) Listen() {
 
 // see: http://golang.org/pkg/reflect/#Value.Call
 func (bot *IRCBot) Process(msg string) {
-	for _, module := range bot.modules {
+	for _, m := range bot.modules {
                 botv := reflect.ValueOf(bot)
                 msgv := reflect.ValueOf(msg)
-                module.Call([]reflect.Value{botv, msgv})
+                modt := module.Types["BotModule"]
+                // check type m == BotModule
+                if modt.ConvertibleTo(m.Type()) {
+                    m.Call([]reflect.Value{botv, msgv})
+                }else{
+                    fmt.Printf("Illegal module: %v\n", m.Type())
+                }
 	}
 }
 
