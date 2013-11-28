@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/textproto"
 	"time"
+        "reflect"
         "./module"
 )
 
@@ -29,10 +30,9 @@ type IRCBot struct {
 	reader  *bufio.Reader
 	writer  *textproto.Writer
 	noises  chan string
-	modules []module.BotModule
+	modules map[string]reflect.Value
 }
 
-//type BotModule func(bot *IRCBot, msg string)
 
 //=============================================================================
 // methods
@@ -49,7 +49,7 @@ func NewBot(address, nickname, username, realname string,
 		realname:   realname,
 		Channels:   Channels,
 		noises:     make(chan string, 1000),
-		modules:    []module.BotModule{module.ModuleFoo},
+		modules:    module.Functions,
 	}
 }
 
@@ -117,9 +117,12 @@ func (bot *IRCBot) Listen() {
 	}
 }
 
+// see: http://golang.org/pkg/reflect/#Value.Call
 func (bot *IRCBot) Process(msg string) {
 	for _, module := range bot.modules {
-		module(bot, msg)
+                botv := reflect.ValueOf(bot)
+                msgv := reflect.ValueOf(msg)
+                module.Call([]reflect.Value{botv, msgv})
 	}
 }
 
@@ -134,15 +137,4 @@ func (bot *IRCBot) MakeNoise() {
 func (bot *IRCBot) GetChannels() []string {
     return bot.Channels
 }
-
-//=============================================================================
-// funtions (module for IRCBot)
-//=============================================================================
-
-//func ModuleFoo(bot *IRCBot, msg string) {
-//	for i := range bot.Channels {
-//		bot.Say(bot.Channels[i], msg)
-//		break
-//	}
-//}
 
