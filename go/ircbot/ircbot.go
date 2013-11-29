@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"net"
 	"net/textproto"
+	"reflect"
 	"time"
-        "reflect"
-        "./module"
 )
+
+import extmod "./module"
 
 //=============================================================================
 // type
@@ -30,8 +31,10 @@ type IRCBot struct {
 	reader  *bufio.Reader
 	writer  *textproto.Writer
 	noises  chan string
-	modules map[string]reflect.Value
+	modules BotModules
 }
+
+type BotModules map[string]reflect.Value
 
 //=============================================================================
 // methods
@@ -39,7 +42,9 @@ type IRCBot struct {
 
 func NewBot(address, nickname, username, realname string,
 	Channels []string) *IRCBot {
-	return &IRCBot{
+
+	fmt.Printf("Initial IRCBot ...\n")
+	bot := &IRCBot{
 		address:    address,
 		nickname:   nickname,
 		username:   username,
@@ -48,7 +53,27 @@ func NewBot(address, nickname, username, realname string,
 		realname:   realname,
 		Channels:   Channels,
 		noises:     make(chan string, 1000),
-		modules:    module.Functions,
+		modules:    make(BotModules),
+	}
+	bot.RegisterModules(extmod.Functions)
+	return bot
+}
+
+func (bot *IRCBot) RegisterModule(modname string, mod reflect.Value) {
+	modt := extmod.Types["BotModule"]
+	// check module == module.BotModule
+	if modt.ConvertibleTo(mod.Type()) {
+		bot.modules["modname"] = mod
+		fmt.Printf("++ inject module: %v(%v)\n", modname, mod.Type())
+	} else {
+		fmt.Printf("-- skip module: %v(%v)\n", modname, mod.Type())
+	}
+}
+
+func (bot *IRCBot) RegisterModules(mods BotModules) {
+	fmt.Printf("Register moduels ...\n")
+	for modname, mod := range mods {
+		bot.RegisterModule(modname, mod)
 	}
 }
 
@@ -118,16 +143,10 @@ func (bot *IRCBot) Listen() {
 
 // see: http://golang.org/pkg/reflect/#Value.Call
 func (bot *IRCBot) Process(msg string) {
-	for _, m := range bot.modules {
-                botv := reflect.ValueOf(bot)
-                msgv := reflect.ValueOf(msg)
-                modt := module.Types["BotModule"]
-                // check type m == BotModule
-                if modt.ConvertibleTo(m.Type()) {
-                    m.Call([]reflect.Value{botv, msgv})
-                }else{
-                    fmt.Printf("Illegal module: %v\n", m.Type())
-                }
+	for _, mod := range bot.modules {
+		botv := reflect.ValueOf(bot)
+		msgv := reflect.ValueOf(msg)
+		mod.Call([]reflect.Value{botv, msgv})
 	}
 }
 
@@ -140,6 +159,5 @@ func (bot *IRCBot) MakeNoise() {
 }
 
 func (bot *IRCBot) GetChannels() []string {
-    return bot.Channels
+	return bot.Channels
 }
-

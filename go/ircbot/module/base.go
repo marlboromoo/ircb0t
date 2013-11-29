@@ -16,5 +16,3 @@ type Bot interface {
 
 type BotModule func(bot Bot, msg string)
 
-
-
