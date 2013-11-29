@@ -7,13 +7,14 @@ import (
 	"net"
 	"net/textproto"
 	"reflect"
+	"regexp"
 	"time"
 )
 
 import extmod "./module"
 
 //=============================================================================
-// type
+// type and variable
 //=============================================================================
 
 type IRCBot struct {
@@ -57,6 +58,20 @@ func NewBot(address, nickname, username, realname string,
 	}
 	bot.RegisterModules(extmod.Functions)
 	return bot
+}
+
+// http://blog.kamilkisiel.net/blog/2012/07/05/using-the-go-regexp-package/
+func (bot *IRCBot) ParseMsg(msg string, r *regexp.Regexp) map[string]string {
+	result := make(map[string]string)
+		if match := r.FindStringSubmatch(msg); match != nil {
+			for i, name:= range r.SubexpNames() {
+				if i == 0 {
+					continue
+				}
+				result[name] = match [i]
+			}
+		}
+		return result
 }
 
 func (bot *IRCBot) RegisterModule(modname string, mod reflect.Value) {
@@ -108,6 +123,20 @@ func (bot *IRCBot) JoinDefault() {
 	for i := range bot.Channels {
 		bot.Writef("JOIN %s", bot.Channels[i])
 	}
+}
+
+func (bot *IRCBot) Pong(server string) {
+	msg := fmt.Sprintf("PONG %s", server)
+	bot.Writef(msg)
+	fmt.Println(msg)
+}
+
+func (bot *IRCBot) Reply(target, message string) {
+	bot.Writef("PRIVMSG %s :%s", target, message)
+}
+
+func (bot *IRCBot) Notice(target, message string) {
+	bot.Writef("NOTICE %s :%s", target, message)
 }
 
 func (bot *IRCBot) Say(channel, message string) {

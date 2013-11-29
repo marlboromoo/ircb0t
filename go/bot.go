@@ -12,7 +12,7 @@ import (
 
 func main() {
 	bot := ircbot.NewBot(
-		"10.10.5.32:6667",
+		"irc.lab:6667",
 		"r0b0t",
 		"robot",
 		"robot",
