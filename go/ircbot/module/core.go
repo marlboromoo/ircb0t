@@ -4,6 +4,7 @@ package module
 import (
 	"regexp"
 	"fmt"
+	"../filter"
 )
 
 //=============================================================================
@@ -11,10 +12,7 @@ import (
 //=============================================================================
 
 func ModulePong(bot Bot, msg string) {
-	var serverPing = regexp.MustCompile(`^PING :(?P<server>.*)`)
-	var userPing = regexp.MustCompile(
-		`:(?P<who>.*) PRIVMSG (?P<target>.*) :\001PING (?P<timestamp>.*)\001`)
-	for _, ping := range []*regexp.Regexp{serverPing, userPing} {
+	for _, ping := range []*regexp.Regexp{filter.ServerPing, filter.UserPing} {
 		result := bot.ParseMsg(msg, ping)
 		if len(result) >= 1 {
 			if server, ok := result["server"]; ok {
