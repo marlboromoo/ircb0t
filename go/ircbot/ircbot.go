@@ -101,7 +101,7 @@ func (bot *IRCBot) RegisterModule(modname string, mod reflect.Value) {
 	modt := extmod.Types["BotModule"]
 	// check module == module.BotModule
 	if modt.ConvertibleTo(mod.Type()) {
-		bot.modules["modname"] = mod
+		bot.modules[modname] = mod
 		bot.Log("++ inject module: %v(%v)\n", modname, mod.Type())
 	} else {
 		bot.Log("-- skip module: %v(%v)\n", modname, mod.Type())
@@ -113,6 +113,8 @@ func (bot *IRCBot) RegisterModules(mods BotModules) {
 	for modname, mod := range mods {
 		bot.RegisterModule(modname, mod)
 	}
+	bot.Log("** Register %v modules, %v modules fail to load.\n",
+		len(bot.modules), len(extmod.Functions) - len(bot.modules))
 }
 
 func (bot *IRCBot) Connect() {
