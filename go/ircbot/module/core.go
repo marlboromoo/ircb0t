@@ -2,10 +2,31 @@
 package module
 
 import (
-	"regexp"
-	"fmt"
 	"../filter"
+	"fmt"
+	"regexp"
 )
+
+//=============================================================================
+// types
+//=============================================================================
+
+type Module interface {
+    Process(bot Bot, msg string)
+}
+
+type Bot interface {
+    GetChannels() []string
+    Say(channel, msg string)
+	Reply(target, msg string)
+	Notice(target, msg string)
+	Pong(server string)
+	Writef(format string, args ... interface{})
+	ParseMsg(msg string, r *regexp.Regexp) map[string]string
+	Log(format string, v ...interface{})
+}
+
+type BotModule func(bot Bot, msg string)
 
 //=============================================================================
 // funtions (module for IRCBot)
@@ -19,9 +40,8 @@ func ModulePong(bot Bot, msg string) {
 				bot.Pong(server)
 			}
 			if who, ok := result["who"]; ok {
-				msg:= fmt.Sprintf("\001PING %s\001", result["timestamp"])
+				msg := fmt.Sprintf("\001PING %s\001", result["timestamp"])
 				bot.Notice(who, msg)
-				fmt.Println(msg)
 			}
 		}
 	}

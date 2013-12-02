@@ -9,6 +9,9 @@ import (
 	"reflect"
 	"regexp"
 	"time"
+	"log"
+	"os"
+	"sync"
 )
 
 import extmod "./module"
@@ -33,9 +36,12 @@ type IRCBot struct {
 	writer  *textproto.Writer
 	noises  chan string
 	modules BotModules
+	logger	*log.Logger
+	wg		*sync.WaitGroup
 }
 
 type BotModules map[string]reflect.Value
+
 
 //=============================================================================
 // methods
@@ -44,8 +50,7 @@ type BotModules map[string]reflect.Value
 func NewBot(address, nickname, username, realname string,
 	Channels []string) *IRCBot {
 
-	fmt.Printf("Initial IRCBot ...\n")
-	bot := &IRCBot{
+	bot := IRCBot{
 		address:    address,
 		nickname:   nickname,
 		username:   username,
@@ -56,8 +61,19 @@ func NewBot(address, nickname, username, realname string,
 		noises:     make(chan string, 1000),
 		modules:    make(BotModules),
 	}
-	bot.RegisterModules(extmod.Functions)
-	return bot
+
+	//. logger
+	f, _ := os.OpenFile(
+		fmt.Sprintf("/tmp/%s.log", bot.nickname),
+		os.O_RDWR|os.O_CREATE|os.O_APPEND, 0660)
+	bot.logger = log.New(f, bot.nickname, log.Ldate|log.Lmicroseconds)
+
+	//. bot pointer
+	return &bot
+}
+
+func (bot *IRCBot) Log(format string, v ...interface{}) {
+	bot.logger.Printf(format, v...)
 }
 
 // http://blog.kamilkisiel.net/blog/2012/07/05/using-the-go-regexp-package/
@@ -79,14 +95,14 @@ func (bot *IRCBot) RegisterModule(modname string, mod reflect.Value) {
 	// check module == module.BotModule
 	if modt.ConvertibleTo(mod.Type()) {
 		bot.modules["modname"] = mod
-		fmt.Printf("++ inject module: %v(%v)\n", modname, mod.Type())
+		bot.Log("++ inject module: %v(%v)\n", modname, mod.Type())
 	} else {
-		fmt.Printf("-- skip module: %v(%v)\n", modname, mod.Type())
+		bot.Log("-- skip module: %v(%v)\n", modname, mod.Type())
 	}
 }
 
 func (bot *IRCBot) RegisterModules(mods BotModules) {
-	fmt.Printf("Register moduels ...\n")
+	bot.Log("?? Register moduels ...\n")
 	for modname, mod := range mods {
 		bot.RegisterModule(modname, mod)
 	}
@@ -95,9 +111,9 @@ func (bot *IRCBot) RegisterModules(mods BotModules) {
 func (bot *IRCBot) Connect() {
 	conn, err := net.Dial("tcp", bot.address)
 	if err != nil {
-		fmt.Printf("Fail to connect to IRC server!\n")
+		bot.Log("!! Fail to connect to IRC server!\n")
 	}
-	fmt.Printf("Connect to IRC server.\n")
+	bot.Log(">> Connect to IRC server.\n")
 	bot.conn = conn
 	bot.reader = bufio.NewReader(bot.conn)
 	bot.writer = textproto.NewWriter(bufio.NewWriter(bot.conn))
@@ -106,6 +122,9 @@ func (bot *IRCBot) Connect() {
 func (bot *IRCBot) Disconnect() {
 	if bot.conn != nil {
 		bot.conn.Close()
+	}
+	if bot.wg != nil {
+		bot.wg.Done()
 	}
 }
 
@@ -126,9 +145,8 @@ func (bot *IRCBot) JoinDefault() {
 }
 
 func (bot *IRCBot) Pong(server string) {
-	msg := fmt.Sprintf("PONG %s", server)
-	bot.Writef(msg)
-	fmt.Println(msg)
+	bot.Writef(fmt.Sprintf("PONG %s", server))
+	bot.Log(">> PONG !")
 }
 
 func (bot *IRCBot) Reply(target, message string) {
@@ -165,7 +183,7 @@ func (bot *IRCBot) ReadLine() string {
 func (bot *IRCBot) Listen() {
 	for {
 		msg := bot.ReadLine()
-		fmt.Printf("%s\n", msg)
+		bot.Log("<< %s\n", msg)
 		bot.Process(msg)
 	}
 }
@@ -189,4 +207,19 @@ func (bot *IRCBot) MakeNoise() {
 
 func (bot *IRCBot) GetChannels() []string {
 	return bot.Channels
+}
+
+func (bot *IRCBot) Launch() {
+	bot.RegisterModules(extmod.Functions)
+	bot.Connect()
+
+    //. process messages
+	go bot.Listen()
+
+	//. say hello
+	bot.Identify()
+	bot.JoinDefault()
+
+    //. say something
+	go bot.MakeNoise()
 }
