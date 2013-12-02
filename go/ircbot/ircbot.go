@@ -129,10 +129,12 @@ func (bot *IRCBot) Connect() {
 func (bot *IRCBot) Disconnect() {
 	if bot.conn != nil {
 		bot.conn.Close()
+		bot.conn = nil
 	}
 	if bot.wg != nil {
 		bot.wg.Done()
 	}
+	bot.Log(">> Disconnect from IRC server !!\n")
 }
 
 func (bot *IRCBot) Writef(format string, args ...interface{}) {
@@ -188,7 +190,7 @@ func (bot *IRCBot) ReadLine() string {
 }
 
 func (bot *IRCBot) Listen() {
-	for {
+	for bot.conn != nil {
 		msg := bot.ReadLine()
 		bot.Log("<< %s\n", msg)
 		bot.Process(msg)
