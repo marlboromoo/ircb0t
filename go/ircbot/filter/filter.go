@@ -7,6 +7,8 @@ import (
 
 var (
 	ServerPing = regexp.MustCompile(`^PING :(?P<server>.*)`)
-	UserPing = regexp.MustCompile(
+	UserPing   = regexp.MustCompile(
 		`:(?P<who>.*) PRIVMSG (?P<target>.*) :\001PING (?P<timestamp>.*)\001`)
+	Quit = regexp.MustCompile(`:(?P<who>.*) PRIVMSG (?P<target>.*) :.quit`)
+	Who  = regexp.MustCompile(`(?P<nick>.*)!~(?P<name>.*)@(?P<host>.*)`)
 )

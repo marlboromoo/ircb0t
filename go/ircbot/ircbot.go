@@ -4,14 +4,15 @@ package ircbot
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"net"
 	"net/textproto"
+	"os"
 	"reflect"
 	"regexp"
-	"time"
-	"log"
-	"os"
 	"sync"
+	"time"
+	"./filter"
 )
 
 import extmod "./module"
@@ -24,40 +25,41 @@ type IRCBot struct {
 	//. IRC server
 	address string "server:port"
 	//. Client infos
+	owner      string
 	nickname   string
 	username   string
 	hostname   string
 	servername string
 	realname   string
-	Channels   []string
+	channels   []string
 	//. MISC
 	conn    net.Conn
 	reader  *bufio.Reader
 	writer  *textproto.Writer
 	noises  chan string
 	modules BotModules
-	logger	*log.Logger
-	wg		*sync.WaitGroup
+	logger  *log.Logger
+	wg      *sync.WaitGroup
 }
 
 type BotModules map[string]reflect.Value
-
 
 //=============================================================================
 // methods
 //=============================================================================
 
-func NewBot(address, nickname, username, realname string,
-	Channels []string) *IRCBot {
+func NewBot(address, owner, nickname, username, realname string,
+	channels []string) *IRCBot {
 
 	bot := IRCBot{
+		owner:      owner,
 		address:    address,
 		nickname:   nickname,
 		username:   username,
 		hostname:   "hostname",
 		servername: "servername",
 		realname:   realname,
-		Channels:   Channels,
+		channels:   channels,
 		noises:     make(chan string, 1000),
 		modules:    make(BotModules),
 	}
@@ -79,15 +81,20 @@ func (bot *IRCBot) Log(format string, v ...interface{}) {
 // http://blog.kamilkisiel.net/blog/2012/07/05/using-the-go-regexp-package/
 func (bot *IRCBot) ParseMsg(msg string, r *regexp.Regexp) map[string]string {
 	result := make(map[string]string)
-		if match := r.FindStringSubmatch(msg); match != nil {
-			for i, name:= range r.SubexpNames() {
-				if i == 0 {
-					continue
-				}
-				result[name] = match [i]
+	if match := r.FindStringSubmatch(msg); match != nil {
+		for i, name := range r.SubexpNames() {
+			if i == 0 {
+				continue
 			}
+			result[name] = match[i]
 		}
-		return result
+	}
+	return result
+}
+
+func (bot *IRCBot) ParseWho(who string) map[string]string {
+	r := bot.ParseMsg(who, filter.Who)
+	return map[string]string{"nick":r["nick"]}
 }
 
 func (bot *IRCBot) RegisterModule(modname string, mod reflect.Value) {
@@ -139,8 +146,8 @@ func (bot *IRCBot) Identify() {
 }
 
 func (bot *IRCBot) JoinDefault() {
-	for i := range bot.Channels {
-		bot.Writef("JOIN %s", bot.Channels[i])
+	for i := range bot.channels {
+		bot.Writef("JOIN %s", bot.channels[i])
 	}
 }
 
@@ -205,21 +212,29 @@ func (bot *IRCBot) MakeNoise() {
 	}
 }
 
-func (bot *IRCBot) GetChannels() []string {
-	return bot.Channels
+func (bot IRCBot) Owner() string {
+	return bot.owner
+}
+
+func (bot *IRCBot) Nickname() string {
+	return bot.nickname
+}
+
+func (bot *IRCBot) Channels() []string {
+	return bot.channels
 }
 
 func (bot *IRCBot) Launch() {
 	bot.RegisterModules(extmod.Functions)
 	bot.Connect()
 
-    //. process messages
+	//. process messages
 	go bot.Listen()
 
 	//. say hello
 	bot.Identify()
 	bot.JoinDefault()
 
-    //. say something
+	//. say something
 	go bot.MakeNoise()
 }
