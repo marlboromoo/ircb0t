@@ -6,10 +6,10 @@ package module
 //=============================================================================
 
 func ModuleIllegal1(bot Bot, msg string, mystuff string) {
-    bot, msg, mystuff  = nil, "", "" 
+	bot, msg, mystuff = nil, "", ""
 }
 
-func ModuleIllegal2(bot Bot) string{
-    bot = nil
-    return  "foo."
+func ModuleIllegal2(bot Bot) string {
+	bot = nil
+	return "foo."
 }

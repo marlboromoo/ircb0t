@@ -12,18 +12,18 @@ import (
 //=============================================================================
 
 type Module interface {
-    Process(bot Bot, msg string)
+	Process(bot Bot, msg string)
 }
 
 type Bot interface {
-    Owner() string
+	Owner() string
 	Nickname() string
 	Channels() []string
-    Say(channel, msg string)
+	Say(channel, msg string)
 	Reply(target, msg string)
 	Notice(target, msg string)
 	Pong(server string)
-	Writef(format string, args ... interface{})
+	Writef(format string, args ...interface{})
 	ParseMsg(msg string, r *regexp.Regexp) map[string]string
 	ParseWho(who string) map[string]string
 	Log(format string, v ...interface{})
@@ -53,7 +53,7 @@ func ModulePong(bot Bot, msg string) {
 
 func ModuleQuit(bot Bot, msg string) {
 	result := bot.ParseMsg(msg, filter.Quit)
-	if len(result) >=1 {
+	if len(result) >= 1 {
 		if who, ok := result["who"]; ok {
 			who = bot.ParseWho(who)["nick"]
 			if result["target"] == bot.Nickname() && who == bot.Owner() {

@@ -2,6 +2,7 @@
 package ircbot
 
 import (
+	"./filter"
 	"bufio"
 	"fmt"
 	"log"
@@ -12,7 +13,6 @@ import (
 	"regexp"
 	"sync"
 	"time"
-	"./filter"
 )
 
 import extmod "./module"
@@ -94,7 +94,7 @@ func (bot *IRCBot) ParseMsg(msg string, r *regexp.Regexp) map[string]string {
 
 func (bot *IRCBot) ParseWho(who string) map[string]string {
 	r := bot.ParseMsg(who, filter.Who)
-	return map[string]string{"nick":r["nick"]}
+	return map[string]string{"nick": r["nick"]}
 }
 
 func (bot *IRCBot) RegisterModule(modname string, mod reflect.Value) {
@@ -114,7 +114,7 @@ func (bot *IRCBot) RegisterModules(mods BotModules) {
 		bot.RegisterModule(modname, mod)
 	}
 	bot.Log("** Register %v modules, %v modules fail to load.\n",
-		len(bot.modules), len(extmod.Functions) - len(bot.modules))
+		len(bot.modules), len(extmod.Functions)-len(bot.modules))
 }
 
 func (bot *IRCBot) Connect() {

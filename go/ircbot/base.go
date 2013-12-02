@@ -10,10 +10,9 @@ import (
 //=============================================================================
 
 type Base struct {
-	wg	*sync.WaitGroup
-	bots	[]*IRCBot
+	wg   *sync.WaitGroup
+	bots []*IRCBot
 }
-
 
 //=============================================================================
 // methods
@@ -22,8 +21,8 @@ type Base struct {
 func NewBase() *Base {
 	var wg sync.WaitGroup
 	p := Base{
-		wg : &wg,
-		bots : []*IRCBot{},
+		wg:   &wg,
+		bots: []*IRCBot{},
 	}
 	return &p
 }
