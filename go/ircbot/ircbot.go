@@ -32,13 +32,14 @@ type IRCBot struct {
 	realname   string
 	channels   []string
 	//. MISC
-	conn    net.Conn
-	reader  *bufio.Reader
-	writer  *textproto.Writer
-	noises  chan string
-	modules BotModules
-	logger  *log.Logger
-	wg      *sync.WaitGroup
+	conn           net.Conn
+	keepConnection bool
+	reader         *bufio.Reader
+	writer         *textproto.Writer
+	noises         chan string
+	modules        BotModules
+	logger         *log.Logger
+	wg             *sync.WaitGroup
 }
 
 type BotModules map[string]reflect.Value
@@ -51,16 +52,18 @@ func NewBot(address, owner, nickname, username, realname string,
 	channels []string) *IRCBot {
 
 	bot := IRCBot{
-		owner:      owner,
-		address:    address,
-		nickname:   nickname,
-		username:   username,
-		hostname:   "hostname",
-		servername: "servername",
-		realname:   realname,
-		channels:   channels,
-		noises:     make(chan string, 1000),
-		modules:    make(BotModules),
+		owner:          owner,
+		address:        address,
+		nickname:       nickname,
+		username:       username,
+		hostname:       "hostname",
+		servername:     "servername",
+		realname:       realname,
+		channels:       channels,
+		noises:         make(chan string, 1000),
+		modules:        make(BotModules),
+		conn:           nil,
+		keepConnection: false,
 	}
 
 	//. logger
@@ -107,6 +110,15 @@ func (bot *IRCBot) Connect() bool {
 	bot.conn = conn
 	bot.reader = bufio.NewReader(bot.conn)
 	bot.writer = textproto.NewWriter(bufio.NewWriter(bot.conn))
+	return true
+}
+
+func (bot *IRCBot) MustConnect() bool {
+	bot.keepConnection = true
+	for !bot.Connect() {
+		bot.Log(">> Retrying connect to IRC server ...")
+		time.Sleep(time.Duration(time.Second * 1))
+	}
 	return true
 }
 
@@ -180,9 +192,16 @@ func (bot *IRCBot) Listen() {
 	for bot.conn != nil {
 		msg, err := bot.ReadLine()
 		if err != nil {
-			bot.Disconnect()
+			bot.Log("!! Lost connection !!")
+			if bot.keepConnection {
+				if bot.MustConnect() {
+					bot.Link()
+				}
+			} else {
+				bot.Disconnect()
+			}
 		}
-		if len(msg) >= 1 {
+		if err == nil && len(msg) >= 1 {
 			bot.Log("<< %s\n", msg)
 			bot.Process(msg)
 		}
@@ -203,7 +222,7 @@ func (bot *IRCBot) Process(msg string) {
 }
 
 func (bot *IRCBot) MakeNoise() {
-	for {
+	for bot.conn != nil {
 		msg := <-bot.noises
 		time.Sleep(time.Duration(time.Second * 3))
 		bot.Writef(msg)
@@ -222,17 +241,16 @@ func (bot *IRCBot) Channels() []string {
 	return bot.channels
 }
 
+func (bot *IRCBot) Link() {
+	bot.Identify()
+	bot.JoinDefault()
+}
+
 func (bot *IRCBot) Launch() {
 	bot.RegisterModules(extmod.Functions)
-	if bot.Connect() {
-		//. process messages
+	if bot.MustConnect() {
 		go bot.Listen()
-
-		//. say hello
-		bot.Identify()
-		bot.JoinDefault()
-
-		//. say something
 		go bot.MakeNoise()
+		bot.Link()
 	}
 }
