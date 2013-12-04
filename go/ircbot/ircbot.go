@@ -2,7 +2,6 @@
 package ircbot
 
 import (
-	"./filter"
 	"bufio"
 	"fmt"
 	"log"
@@ -10,7 +9,7 @@ import (
 	"net/textproto"
 	"os"
 	"reflect"
-	"regexp"
+	"strings"
 	"sync"
 	"time"
 )
@@ -76,25 +75,6 @@ func NewBot(address, owner, nickname, username, realname string,
 
 func (bot *IRCBot) Log(format string, v ...interface{}) {
 	bot.logger.Printf(format, v...)
-}
-
-// http://blog.kamilkisiel.net/blog/2012/07/05/using-the-go-regexp-package/
-func (bot *IRCBot) ParseMsg(msg string, r *regexp.Regexp) map[string]string {
-	result := make(map[string]string)
-	if match := r.FindStringSubmatch(msg); match != nil {
-		for i, name := range r.SubexpNames() {
-			if i == 0 {
-				continue
-			}
-			result[name] = match[i]
-		}
-	}
-	return result
-}
-
-func (bot *IRCBot) ParseWho(who string) map[string]string {
-	r := bot.ParseMsg(who, filter.Who)
-	return map[string]string{"nick": r["nick"]}
 }
 
 func (bot *IRCBot) RegisterModule(modname string, mod reflect.Value) {
@@ -203,6 +183,10 @@ func (bot *IRCBot) Listen() {
 func (bot *IRCBot) Process(msg string) {
 	for _, mod := range bot.modules {
 		botv := reflect.ValueOf(bot)
+		msg := NewMsg(
+			strings.Split(bot.address, ":")[0],
+			strings.Split(bot.address, ":")[1],
+			msg)
 		msgv := reflect.ValueOf(msg)
 		mod.Call([]reflect.Value{botv, msgv})
 	}

@@ -2,9 +2,9 @@
 package module
 
 import (
-	"../filter"
 	"fmt"
 	"regexp"
+	"strings"
 )
 
 //=============================================================================
@@ -24,41 +24,56 @@ type Bot interface {
 	Notice(target, msg string)
 	Pong(server string)
 	Writef(format string, args ...interface{})
-	ParseMsg(msg string, r *regexp.Regexp) map[string]string
-	ParseWho(who string) map[string]string
 	Log(format string, v ...interface{})
 	Disconnect()
 }
 
-type BotModule func(bot Bot, msg string)
+type Msg interface {
+	Raw() string
+	Tags() []string
+	Trim() string
+	Parsemp(r *regexp.Regexp) map[string]string
+	Parsese(r *regexp.Regexp) []string
+	ParsePRIVMSG() map[string]string
+	IsPRIVMSG() bool
+	IsSERVRMSG() bool
+	IsPINGMSG() bool
+	IsUNKNMSG() bool
+	GetPRIVMSG() string
+}
+
+type BotModule func(bot Bot, msg Msg)
 
 //=============================================================================
 // funtions (module for IRCBot)
 //=============================================================================
 
-func ModulePong(bot Bot, msg string) {
-	for _, ping := range []*regexp.Regexp{filter.ServerPing, filter.UserPing} {
-		result := bot.ParseMsg(msg, ping)
-		if len(result) >= 1 {
-			if server, ok := result["server"]; ok {
-				bot.Pong(server)
-			}
-			if who, ok := result["who"]; ok {
-				msg := fmt.Sprintf("\001PING %s\001", result["timestamp"])
-				bot.Notice(who, msg)
-			}
+func ModuleDebugMSG(bot Bot, msg Msg) {
+	fmt.Println(msg.Tags())
+	//fmt.Println(msg.Raw())
+}
+
+func ModulePong(bot Bot, msg Msg) {
+	if msg.IsPINGMSG() {
+		if msg.IsPRIVMSG() {
+			//. from user
+			mp := msg.ParsePRIVMSG()
+			timestamp := strings.Fields(strings.Trim(mp["message"], "\001"))[1]
+			msg := fmt.Sprintf("\001PING %s\001", timestamp)
+			bot.Notice(mp["nick"], msg)
+		} else {
+			//. from server
+			bot.Pong(strings.Split(msg.Raw(), ":")[1])
 		}
 	}
 }
 
-func ModuleQuit(bot Bot, msg string) {
-	result := bot.ParseMsg(msg, filter.Quit)
-	if len(result) >= 1 {
-		if who, ok := result["who"]; ok {
-			who = bot.ParseWho(who)["nick"]
-			if result["target"] == bot.Nickname() && who == bot.Owner() {
-				bot.Disconnect()
-			}
+func ModuleQuit(bot Bot, msg Msg) {
+	if msg.IsPRIVMSG() {
+		mp := msg.ParsePRIVMSG()
+		//. must recive private message from bot's owner
+		if mp["nick"] == bot.Owner() && mp["to"] == bot.Nickname() && mp["message"] == ".quit" {
+			bot.Disconnect()
 		}
 	}
 }
