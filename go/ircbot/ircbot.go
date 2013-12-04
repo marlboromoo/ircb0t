@@ -97,15 +97,17 @@ func (bot *IRCBot) RegisterModules(mods BotModules) {
 		len(bot.modules), len(extmod.Functions)-len(bot.modules))
 }
 
-func (bot *IRCBot) Connect() {
-	conn, err := net.Dial("tcp", bot.address)
+func (bot *IRCBot) Connect() bool {
+	conn, err := net.DialTimeout("tcp", bot.address, time.Duration(time.Second*10))
 	if err != nil {
 		bot.Log("!! Fail to connect to IRC server!\n")
+		return false
 	}
 	bot.Log(">> Connect to IRC server.\n")
 	bot.conn = conn
 	bot.reader = bufio.NewReader(bot.conn)
 	bot.writer = textproto.NewWriter(bufio.NewWriter(bot.conn))
+	return true
 }
 
 func (bot *IRCBot) Disconnect() {
@@ -159,23 +161,31 @@ func (bot *IRCBot) Action(channel, message string) {
 	//bot.Writef("PRIVMSG %s :ACTION %s", channel, message)
 }
 
-func (bot *IRCBot) ReadLine() string {
+func (bot *IRCBot) ReadLine() (string, error) {
 	var line_ []byte
 	for true {
-		line, isPrefix, _ := bot.reader.ReadLine()
+		line, isPrefix, err := bot.reader.ReadLine()
+		if err != nil {
+			return "", err
+		}
 		line_ = append(line_, line...)
 		if !isPrefix {
 			break
 		}
 	}
-	return string(line_)
+	return string(line_), nil
 }
 
 func (bot *IRCBot) Listen() {
 	for bot.conn != nil {
-		msg := bot.ReadLine()
-		bot.Log("<< %s\n", msg)
-		bot.Process(msg)
+		msg, err := bot.ReadLine()
+		if err != nil {
+			bot.Disconnect()
+		}
+		if len(msg) >= 1 {
+			bot.Log("<< %s\n", msg)
+			bot.Process(msg)
+		}
 	}
 }
 
@@ -214,15 +224,15 @@ func (bot *IRCBot) Channels() []string {
 
 func (bot *IRCBot) Launch() {
 	bot.RegisterModules(extmod.Functions)
-	bot.Connect()
+	if bot.Connect() {
+		//. process messages
+		go bot.Listen()
 
-	//. process messages
-	go bot.Listen()
+		//. say hello
+		bot.Identify()
+		bot.JoinDefault()
 
-	//. say hello
-	bot.Identify()
-	bot.JoinDefault()
-
-	//. say something
-	go bot.MakeNoise()
+		//. say something
+		go bot.MakeNoise()
+	}
 }
