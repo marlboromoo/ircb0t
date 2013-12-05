@@ -3,12 +3,14 @@ package ircbot
 
 import (
 	"bufio"
+	"container/list"
 	"fmt"
 	"log"
 	"net"
 	"net/textproto"
 	"os"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -34,6 +36,9 @@ type IRCBot struct {
 	//. MISC
 	conn           net.Conn
 	keepConnection bool
+	pipeMessage    bool
+	pipeBuffer     *list.List
+	pipe           BotPipe
 	reader         *bufio.Reader
 	writer         *textproto.Writer
 	noises         chan string
@@ -43,6 +48,7 @@ type IRCBot struct {
 }
 
 type BotModules map[string]reflect.Value
+type BotPipe chan *Msg
 
 //=============================================================================
 // methods
@@ -64,13 +70,16 @@ func NewBot(address, owner, nickname, username, realname string,
 		modules:        make(BotModules),
 		conn:           nil,
 		keepConnection: false,
+		pipeMessage:    false,
+		pipeBuffer:     list.New(),
+		pipe:           make(BotPipe),
 	}
 
 	//. logger
 	f, _ := os.OpenFile(
 		fmt.Sprintf("/tmp/%s.log", bot.nickname),
 		os.O_RDWR|os.O_CREATE|os.O_APPEND, 0660)
-	bot.logger = log.New(f, bot.nickname, log.Ldate|log.Lmicroseconds)
+	bot.logger = log.New(f, bot.nickname+" ", log.Ldate|log.Lmicroseconds)
 
 	//. bot pointer
 	return &bot
@@ -188,6 +197,13 @@ func (bot *IRCBot) ReadLine() (string, error) {
 	return string(line_), nil
 }
 
+func (bot *IRCBot) toMsg(msg string) *Msg {
+	return NewMsg(
+		strings.Split(bot.address, ":")[0],
+		strings.Split(bot.address, ":")[1],
+		msg)
+}
+
 func (bot *IRCBot) Listen() {
 	for bot.conn != nil {
 		msg, err := bot.ReadLine()
@@ -203,19 +219,19 @@ func (bot *IRCBot) Listen() {
 		}
 		if err == nil && len(msg) >= 1 {
 			bot.Log("<< %s\n", msg)
-			bot.Process(msg)
+			if bot.pipeMessage {
+				bot.pipeBuffer.PushBack(bot.toMsg(msg))
+			}
+			bot.Process(bot.toMsg(msg))
 		}
+		runtime.Gosched()
 	}
 }
 
 // see: http://golang.org/pkg/reflect/#Value.Call
-func (bot *IRCBot) Process(msg string) {
+func (bot *IRCBot) Process(msg *Msg) {
 	for _, mod := range bot.modules {
 		botv := reflect.ValueOf(bot)
-		msg := NewMsg(
-			strings.Split(bot.address, ":")[0],
-			strings.Split(bot.address, ":")[1],
-			msg)
 		msgv := reflect.ValueOf(msg)
 		mod.Call([]reflect.Value{botv, msgv})
 	}
@@ -241,6 +257,20 @@ func (bot *IRCBot) Channels() []string {
 	return bot.channels
 }
 
+func (bot *IRCBot) Pipe() {
+	for bot.conn != nil {
+		if e := bot.pipeBuffer.Front(); e != nil {
+			msg := bot.pipeBuffer.Remove(e).(*Msg)
+			bot.pipe <- msg
+		}
+		runtime.Gosched()
+	}
+}
+
+func (bot *IRCBot) GetPipe() BotPipe {
+	return bot.pipe
+}
+
 func (bot *IRCBot) Link() {
 	bot.Identify()
 	bot.JoinDefault()
@@ -251,6 +281,21 @@ func (bot *IRCBot) Launch() {
 	if bot.MustConnect() {
 		go bot.Listen()
 		go bot.MakeNoise()
+		bot.Link()
+	}
+}
+
+// create  a channel for user to recive the IRC messages
+func (bot *IRCBot) Capture() {
+	// init pipe
+	bot.pipeMessage = true
+
+	// other stuffs
+	bot.RegisterModules(extmod.Functions)
+	if bot.MustConnect() {
+		go bot.Listen()
+		go bot.MakeNoise()
+		go bot.Pipe()
 		bot.Link()
 	}
 }

@@ -4,7 +4,6 @@ package main
 import (
 	"./ircbot"
 	"fmt"
-	"time"
 )
 
 //=============================================================================
@@ -13,6 +12,7 @@ import (
 
 func main() {
 
+	//. define bots
 	bot1 := ircbot.NewBot(
 		"irc.lab:6667",
 		"marlboromoo",
@@ -31,12 +31,16 @@ func main() {
 		[]string{"#foo", "#bar"},
 	)
 
+	//. put bots in base
 	bots := []*ircbot.IRCBot{bot1, bot2}
-
 	base := ircbot.NewBase()
 	base.AddBots(bots)
-	base.Launch()
 
+	//. launch the bots
+	//base.Launch() //. do not have pipe to interactive with IRC messages
+	base.Capture()
+
+	//. do other stuffs
 	for _, bot := range bots {
 		channels := bot.Channels()
 		for i := range channels {
@@ -46,10 +50,15 @@ func main() {
 		}
 	}
 
+	//. using pipe to interactive with IRC messages
+	pipe := bot1.GetPipe()
+	for msg := range pipe {
+		if msg.IsPRIVMSG() {
+			fmt.Println(msg.Raw())
+		}
+	}
+
 	// wait to bots exist
-	time.Sleep(time.Duration(time.Second * 3))
-	//bot1.Disconnect()
-	//bot2.Disconnect()
 	base.Wait()
 
 }

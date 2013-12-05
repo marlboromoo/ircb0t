@@ -48,3 +48,9 @@ func (base *Base) Launch() {
 		go bot.Launch()
 	}
 }
+
+func (base *Base) Capture() {
+	for _, bot := range base.bots {
+		go bot.Capture()
+	}
+}
