@@ -299,3 +299,13 @@ func (bot *IRCBot) Capture() {
 		bot.Link()
 	}
 }
+
+func (bot *IRCBot) Debug() {
+	fmt.Printf("%v Bot: %v, NumGoroutine: %v, pipeBuffer: %v, noises: %v\n",
+		time.Now().Format(time.RFC3339),
+		bot.nickname,
+		runtime.NumGoroutine(),
+		bot.pipeBuffer.Len(),
+		len(bot.noises),
+	)
+}
