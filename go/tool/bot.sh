@@ -12,15 +12,19 @@ check_bin(){
     echo $bin
 }
 
+go2root(){
+    cd $(dirname $0)
+    cd ../
+}
+
 run(){
     reflect
-    cd $(dirname $(dirname $0))
+    echo $PWD
     go=$(check_bin go)
     $go run $MAIN
 }
 
 reflect(){
-    cd $(dirname $(dirname $0))
     pkgreflect=$(check_bin pkgreflect)
     $pkgreflect $MODULE
 }
@@ -31,9 +35,11 @@ usage(){
 
 case $1 in
     run)
+        go2root
         run
         ;;
     reflect)
+        go2root
         reflect 
         ;;
     *)
