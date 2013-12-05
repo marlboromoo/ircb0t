@@ -38,17 +38,18 @@ type IRCBot struct {
 	keepConnection bool
 	pipeMessage    bool
 	pipeBuffer     *list.List
-	pipe           BotPipe
+	pipe           Botpipe
 	reader         *bufio.Reader
 	writer         *textproto.Writer
-	noises         chan string
-	modules        BotModules
-	logger         *log.Logger
-	wg             *sync.WaitGroup
+	//noises         chan string
+	noises  *list.List
+	modules BotModules
+	logger  *log.Logger
+	wg      *sync.WaitGroup
 }
 
 type BotModules map[string]reflect.Value
-type BotPipe chan *Msg
+type Botpipe chan *Msg
 
 //=============================================================================
 // methods
@@ -66,13 +67,13 @@ func NewBot(address, owner, nickname, username, realname string,
 		servername:     "servername",
 		realname:       realname,
 		channels:       channels,
-		noises:         make(chan string, 1000),
+		noises:         list.New(),
 		modules:        make(BotModules),
 		conn:           nil,
 		keepConnection: false,
 		pipeMessage:    false,
 		pipeBuffer:     list.New(),
-		pipe:           make(BotPipe),
+		pipe:           make(Botpipe),
 	}
 
 	//. logger
@@ -172,17 +173,17 @@ func (bot *IRCBot) Notice(target, message string) {
 }
 
 func (bot *IRCBot) Say(channel, message string) {
-	bot.noises <- fmt.Sprintf("PRIVMSG %s :%s", channel, message)
-	//bot.Writef("PRIVMSG %s :%s", channel, message)
+	msg := fmt.Sprintf("PRIVMSG %s :%s", channel, message)
+	bot.noises.PushFront(msg)
 }
 
 // see: http://www.irchelp.org/irchelp/rfc/ctcpspec.html
 func (bot *IRCBot) Action(channel, message string) {
-	bot.noises <- fmt.Sprintf("PRIVMSG %s :\001ACTION %s\001", channel, message)
-	//bot.Writef("PRIVMSG %s :ACTION %s", channel, message)
+	msg := fmt.Sprintf("PRIVMSG %s :\001ACTION %s\001", channel, message)
+	bot.noises.PushFront(msg)
 }
 
-func (bot *IRCBot) ReadLine() (string, error) {
+func (bot *IRCBot) readLine() (string, error) {
 	var line_ []byte
 	for true {
 		line, isPrefix, err := bot.reader.ReadLine()
@@ -204,9 +205,9 @@ func (bot *IRCBot) toMsg(msg string) *Msg {
 		msg)
 }
 
-func (bot *IRCBot) Listen() {
+func (bot *IRCBot) listen() {
 	for bot.conn != nil {
-		msg, err := bot.ReadLine()
+		msg, err := bot.readLine()
 		if err != nil {
 			bot.Log("!! Lost connection !!")
 			if bot.keepConnection {
@@ -222,14 +223,14 @@ func (bot *IRCBot) Listen() {
 			if bot.pipeMessage {
 				bot.pipeBuffer.PushBack(bot.toMsg(msg))
 			}
-			bot.Process(bot.toMsg(msg))
+			bot.process(bot.toMsg(msg))
 		}
 		runtime.Gosched()
 	}
 }
 
 // see: http://golang.org/pkg/reflect/#Value.Call
-func (bot *IRCBot) Process(msg *Msg) {
+func (bot *IRCBot) process(msg *Msg) {
 	for _, mod := range bot.modules {
 		botv := reflect.ValueOf(bot)
 		msgv := reflect.ValueOf(msg)
@@ -237,11 +238,14 @@ func (bot *IRCBot) Process(msg *Msg) {
 	}
 }
 
-func (bot *IRCBot) MakeNoise() {
+func (bot *IRCBot) makeNoise() {
 	for bot.conn != nil {
-		msg := <-bot.noises
-		time.Sleep(time.Duration(time.Second * 3))
-		bot.Writef(msg)
+		if e := bot.noises.Front(); e != nil {
+			msg := bot.noises.Remove(e)
+			bot.Writef(msg.(string))
+			time.Sleep(time.Duration(time.Second * 3))
+		}
+		runtime.Gosched()
 	}
 }
 
@@ -257,7 +261,7 @@ func (bot *IRCBot) Channels() []string {
 	return bot.channels
 }
 
-func (bot *IRCBot) Pipe() {
+func (bot *IRCBot) makePipe() {
 	for bot.conn != nil {
 		if e := bot.pipeBuffer.Front(); e != nil {
 			msg := bot.pipeBuffer.Remove(e).(*Msg)
@@ -267,7 +271,7 @@ func (bot *IRCBot) Pipe() {
 	}
 }
 
-func (bot *IRCBot) GetPipe() BotPipe {
+func (bot *IRCBot) GetPipe() Botpipe {
 	return bot.pipe
 }
 
@@ -279,8 +283,8 @@ func (bot *IRCBot) Link() {
 func (bot *IRCBot) Launch() {
 	bot.RegisterModules(extmod.Functions)
 	if bot.MustConnect() {
-		go bot.Listen()
-		go bot.MakeNoise()
+		go bot.listen()
+		go bot.makeNoise()
 		bot.Link()
 	}
 }
@@ -293,9 +297,9 @@ func (bot *IRCBot) Capture() {
 	// other stuffs
 	bot.RegisterModules(extmod.Functions)
 	if bot.MustConnect() {
-		go bot.Listen()
-		go bot.MakeNoise()
-		go bot.Pipe()
+		go bot.listen()
+		go bot.makeNoise()
+		go bot.makePipe()
 		bot.Link()
 	}
 }
@@ -306,6 +310,6 @@ func (bot *IRCBot) Debug() {
 		bot.nickname,
 		runtime.NumGoroutine(),
 		bot.pipeBuffer.Len(),
-		len(bot.noises),
+		bot.noises.Len(),
 	)
 }
