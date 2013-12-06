@@ -25,7 +25,7 @@ type Bot interface {
 	Pong(server string)
 	Send(format string, args ...interface{})
 	Log(format string, v ...interface{})
-	Disconnect()
+	Quit()
 }
 
 type Msg interface {
@@ -34,46 +34,39 @@ type Msg interface {
 	Trim() string
 	Parsemp(r *regexp.Regexp) map[string]string
 	Parsese(r *regexp.Regexp) []string
-	ParsePRIVMSG() map[string]string
+	//ParsePRIVMSG() map[string]string
 	IsPRIVMSG() bool
 	IsSERVMSG() bool
 	IsPINGMSG() bool
 	IsUNKNMSG() bool
-	GetPRIVMSG() string
+	GetPRIVMSG() PRIVMSG
 }
 
 type BotModule func(bot Bot, msg Msg)
+
+type PRIVMSG struct {
+	Nick    string
+	User    string
+	Host    string
+	To      string
+	Message string
+}
 
 //=============================================================================
 // funtions (module for IRCBot)
 //=============================================================================
 
-func ModuleDebugMSG(bot Bot, msg Msg) {
-	//fmt.Println(msg.Tags())
-	//fmt.Println(msg.Raw())
-}
-
 func ModulePong(bot Bot, msg Msg) {
 	if msg.IsPINGMSG() {
 		if msg.IsPRIVMSG() {
 			//. from user
-			mp := msg.ParsePRIVMSG()
-			timestamp := strings.Fields(strings.Trim(mp["message"], "\001"))[1]
+			pm := msg.GetPRIVMSG()
+			timestamp := strings.Fields(strings.Trim(pm.Message, "\001"))[1]
 			msg := fmt.Sprintf("\001PING %s\001", timestamp)
-			bot.Notice(mp["nick"], msg)
+			bot.Notice(pm.Nick, msg)
 		} else {
 			//. from server
 			bot.Pong(strings.Split(msg.Raw(), ":")[1])
-		}
-	}
-}
-
-func ModuleQuit(bot Bot, msg Msg) {
-	if msg.IsPRIVMSG() {
-		mp := msg.ParsePRIVMSG()
-		//. must recive private message from bot's owner
-		if mp["nick"] == bot.Owner() && mp["to"] == bot.Nickname() && mp["message"] == ".quit" {
-			bot.Disconnect()
 		}
 	}
 }

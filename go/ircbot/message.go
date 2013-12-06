@@ -2,6 +2,7 @@
 package ircbot
 
 import (
+	"./module"
 	"regexp"
 	"strings"
 )
@@ -136,9 +137,16 @@ func (msg *Msg) IsUNKNMSG() bool {
 	return hasElement(msg.Tags(), UNKNMSG)
 }
 
-func (msg *Msg) GetPRIVMSG() string {
+func (msg *Msg) GetPRIVMSG() module.PRIVMSG {
 	if msg.IsPRIVMSG() {
-		return msg.Parsemp(rePRIVMSG)["message"]
+		r := msg.Parsemp(rePRIVMSG)
+		return module.PRIVMSG{
+			Nick:    r["nick"],
+			User:    r["user"],
+			Host:    r["host"],
+			To:      r["to"],
+			Message: r["message"],
+		}
 	}
-	return ""
+	return module.PRIVMSG{}
 }

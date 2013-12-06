@@ -129,7 +129,7 @@ func (bot *IRCBot) MustConnect() bool {
 	bot.keepConnection = true
 	for !bot.Connect() {
 		bot.Log(">> Retrying connect to IRC server ...")
-		time.Sleep(time.Duration(time.Second * 1))
+		time.Sleep(time.Duration(time.Second * 2))
 	}
 	return true
 }
@@ -138,9 +138,6 @@ func (bot *IRCBot) Disconnect() {
 	if bot.conn != nil {
 		bot.conn.Close()
 		bot.conn = nil
-	}
-	if bot.wg != nil {
-		bot.wg.Done()
 	}
 	bot.Log(">> Disconnect from IRC server !!\n")
 }
@@ -236,7 +233,7 @@ func (bot *IRCBot) listen() {
 					bot.Link()
 				}
 			} else {
-				bot.Disconnect()
+				runtime.Goexit()
 			}
 		}
 		if err == nil && len(msg) >= 1 {
@@ -313,6 +310,15 @@ func (bot *IRCBot) PipeOff() {
 func (bot *IRCBot) Link() {
 	bot.Identify()
 	bot.JoinDefault()
+}
+
+func (bot *IRCBot) Quit() {
+	bot.keepConnection = false
+	bot.Disconnect()
+	if bot.wg != nil {
+		bot.wg.Done()
+		bot.wg = nil
+	}
 }
 
 func (bot *IRCBot) Launch() {
