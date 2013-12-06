@@ -124,7 +124,7 @@ func (msg *Msg) IsPRIVMSG() bool {
 	return hasElement(msg.Tags(), PRIVMSG)
 }
 
-func (msg *Msg) IsSERVRMSG() bool {
+func (msg *Msg) IsSERVMSG() bool {
 	return hasElement(msg.Tags(), SERVMSG)
 }
 

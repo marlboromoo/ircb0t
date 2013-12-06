@@ -4,6 +4,7 @@ package main
 import (
 	"./ircbot"
 	"fmt"
+	"runtime"
 	"time"
 )
 
@@ -32,14 +33,20 @@ func main() {
 		[]string{"#foo", "#bar"},
 	)
 
-	//. put bots in base
+	//. link bots with controller
+	bot1.PipeOn() //. enable pipe to recive the IRC messages
+	bot2.PipeOn()
 	bots := []*ircbot.IRCBot{bot1, bot2}
-	base := ircbot.NewBase()
-	base.AddBots(bots)
+	ctrler := ircbot.NewController()
+	ctrler.LinkBots(bots)
 
 	//. launch the bots
-	//base.Launch() //. do not have pipe to interactive with IRC messages
-	base.Capture()
+	ctrler.Launch()
+
+	//. ensure the robot are connected
+	for !ctrler.BotsAreConnected() {
+		time.Sleep(time.Duration(time.Millisecond * 500))
+	}
 
 	//. do other stuffs
 	for _, bot := range bots {
@@ -48,22 +55,22 @@ func main() {
 			bot.Say(channels[i], fmt.Sprintf("Hello %s", channels[i]))
 			bot.Action(channels[i], "shake his body")
 			bot.Action(channels[i], "唱了一首歌.")
-			bot.Debug()
 		}
 	}
 
 	//. using pipe to interactive with IRC messages
+	pipe := bot1.GetPipe()
 	go func() {
-		pipe := bot1.GetPipe()
 		for msg := range pipe {
 			if msg.IsPRIVMSG() {
 				//fmt.Println(msg.Raw())
 				fmt.Sprintln(msg.Raw())
 			}
+			runtime.Gosched()
 		}
 	}()
 
-	//. debug
+	//. just for debug
 	go func() {
 		for {
 			for _, bot := range bots {
@@ -74,5 +81,5 @@ func main() {
 	}()
 
 	// wait to bots exist
-	base.Wait()
+	ctrler.Wait()
 }

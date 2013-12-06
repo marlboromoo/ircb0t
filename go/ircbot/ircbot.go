@@ -143,44 +143,55 @@ func (bot *IRCBot) Disconnect() {
 	bot.Log(">> Disconnect from IRC server !!\n")
 }
 
-func (bot *IRCBot) Writef(format string, args ...interface{}) {
-	bot.writer.PrintfLine(format, args...)
+func (bot *IRCBot) IsConnected() bool {
+	if bot.conn != nil && bot.reader != nil && bot.writer != nil {
+		return true
+	}
+	return false
+}
+
+func (bot *IRCBot) Send(format string, args ...interface{}) {
+	if bot.conn != nil {
+		bot.writer.PrintfLine(format, args...)
+	}
 }
 
 func (bot *IRCBot) Identify() {
-	bot.Writef("USER %s %s %s :%s",
+	bot.Send("USER %s %s %s :%s",
 		bot.nickname, bot.hostname, bot.servername, bot.realname)
-	bot.Writef("NICK %s", bot.nickname)
+	bot.Send("NICK %s", bot.nickname)
 }
 
 func (bot *IRCBot) JoinDefault() {
 	for i := range bot.channels {
-		bot.Writef("JOIN %s", bot.channels[i])
+		bot.Send("JOIN %s", bot.channels[i])
 	}
 }
 
 func (bot *IRCBot) Pong(server string) {
-	bot.Writef(fmt.Sprintf("PONG %s", server))
+	bot.Send(fmt.Sprintf("PONG %s", server))
 	bot.Log(">> PONG !")
 }
 
 func (bot *IRCBot) Reply(target, message string) {
-	bot.Writef("PRIVMSG %s :%s", target, message)
+	bot.Send("PRIVMSG %s :%s", target, message)
 }
 
 func (bot *IRCBot) Notice(target, message string) {
-	bot.Writef("NOTICE %s :%s", target, message)
+	bot.Send("NOTICE %s :%s", target, message)
 }
 
 func (bot *IRCBot) Say(channel, message string) {
 	msg := fmt.Sprintf("PRIVMSG %s :%s", channel, message)
-	bot.noises.PushFront(msg)
+	//bot.noises.PushFront(msg)
+	bot.Send(msg)
 }
 
 // see: http://www.irchelp.org/irchelp/rfc/ctcpspec.html
 func (bot *IRCBot) Action(channel, message string) {
 	msg := fmt.Sprintf("PRIVMSG %s :\001ACTION %s\001", channel, message)
-	bot.noises.PushFront(msg)
+	//bot.noises.PushFront(msg)
+	bot.Send(msg)
 }
 
 func (bot *IRCBot) readLine() (string, error) {
@@ -220,12 +231,11 @@ func (bot *IRCBot) listen() {
 		}
 		if err == nil && len(msg) >= 1 {
 			bot.Log("<< %s\n", msg)
+			go bot.process(bot.toMsg(msg))
 			if bot.pipeMessage {
 				bot.pipeBuffer.PushBack(bot.toMsg(msg))
 			}
-			bot.process(bot.toMsg(msg))
 		}
-		runtime.Gosched()
 	}
 }
 
@@ -234,18 +244,21 @@ func (bot *IRCBot) process(msg *Msg) {
 	for _, mod := range bot.modules {
 		botv := reflect.ValueOf(bot)
 		msgv := reflect.ValueOf(msg)
-		mod.Call([]reflect.Value{botv, msgv})
+		go mod.Call([]reflect.Value{botv, msgv})
 	}
 }
 
 func (bot *IRCBot) makeNoise() {
 	for bot.conn != nil {
-		if e := bot.noises.Front(); e != nil {
-			msg := bot.noises.Remove(e)
-			bot.Writef(msg.(string))
-			time.Sleep(time.Duration(time.Second * 3))
+		//bot.Log("** makeNoise")
+		for bot.noises.Len() >= 1 {
+			if e := bot.noises.Front(); e != nil {
+				msg := bot.noises.Remove(e)
+				bot.Send(msg.(string))
+				time.Sleep(time.Duration(time.Millisecond * 500))
+			}
 		}
-		runtime.Gosched()
+		time.Sleep(time.Duration(time.Millisecond * 500))
 	}
 }
 
@@ -263,16 +276,28 @@ func (bot *IRCBot) Channels() []string {
 
 func (bot *IRCBot) makePipe() {
 	for bot.conn != nil {
-		if e := bot.pipeBuffer.Front(); e != nil {
-			msg := bot.pipeBuffer.Remove(e).(*Msg)
-			bot.pipe <- msg
+		//bot.Log("** makePipe")
+		for bot.pipeBuffer.Len() >= 1 {
+			if e := bot.pipeBuffer.Front(); e != nil {
+				msg := bot.pipeBuffer.Remove(e).(*Msg)
+				bot.pipe <- msg
+			}
+
 		}
-		runtime.Gosched()
+		time.Sleep(time.Duration(time.Millisecond * 500))
 	}
 }
 
 func (bot *IRCBot) GetPipe() Botpipe {
 	return bot.pipe
+}
+
+func (bot *IRCBot) PipeOn() {
+	bot.pipeMessage = true
+}
+
+func (bot *IRCBot) PipeOff() {
+	bot.pipeMessage = false
 }
 
 func (bot *IRCBot) Link() {
@@ -284,31 +309,18 @@ func (bot *IRCBot) Launch() {
 	bot.RegisterModules(extmod.Functions)
 	if bot.MustConnect() {
 		go bot.listen()
-		go bot.makeNoise()
-		bot.Link()
-	}
-}
-
-// create  a channel for user to recive the IRC messages
-func (bot *IRCBot) Capture() {
-	// init pipe
-	bot.pipeMessage = true
-
-	// other stuffs
-	bot.RegisterModules(extmod.Functions)
-	if bot.MustConnect() {
-		go bot.listen()
-		go bot.makeNoise()
+		//go bot.makeNoise()
 		go bot.makePipe()
 		bot.Link()
 	}
 }
 
 func (bot *IRCBot) Debug() {
-	fmt.Printf("%v Bot: %v, NumGoroutine: %v, pipeBuffer: %v, noises: %v\n",
+	fmt.Printf("%v Bot: %v, NumGoroutine: %v, pipeMessage: %v, pipeBuffer: %v, noises: %v\n",
 		time.Now().Format(time.RFC3339),
 		bot.nickname,
 		runtime.NumGoroutine(),
+		bot.pipeMessage,
 		bot.pipeBuffer.Len(),
 		bot.noises.Len(),
 	)

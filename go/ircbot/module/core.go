@@ -23,7 +23,7 @@ type Bot interface {
 	Reply(target, msg string)
 	Notice(target, msg string)
 	Pong(server string)
-	Writef(format string, args ...interface{})
+	Send(format string, args ...interface{})
 	Log(format string, v ...interface{})
 	Disconnect()
 }
@@ -36,7 +36,7 @@ type Msg interface {
 	Parsese(r *regexp.Regexp) []string
 	ParsePRIVMSG() map[string]string
 	IsPRIVMSG() bool
-	IsSERVRMSG() bool
+	IsSERVMSG() bool
 	IsPINGMSG() bool
 	IsUNKNMSG() bool
 	GetPRIVMSG() string
