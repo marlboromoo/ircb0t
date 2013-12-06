@@ -53,8 +53,7 @@ func main() {
 		channels := bot.Channels()
 		for i := range channels {
 			bot.Say(channels[i], fmt.Sprintf("Hello %s", channels[i]))
-			bot.Action(channels[i], "shake his body")
-			bot.Action(channels[i], "唱了一首歌.")
+			bot.Action(channels[i], "向大家問好")
 		}
 	}
 

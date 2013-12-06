@@ -42,10 +42,11 @@ type IRCBot struct {
 	reader         *bufio.Reader
 	writer         *textproto.Writer
 	//noises         chan string
-	noises  *list.List
-	modules BotModules
-	logger  *log.Logger
-	wg      *sync.WaitGroup
+	noises    *list.List
+	modules   BotModules
+	logger    *log.Logger
+	wg        *sync.WaitGroup
+	scheduler *Scheduler
 }
 
 type BotModules map[string]reflect.Value
@@ -74,6 +75,7 @@ func NewBot(address, owner, nickname, username, realname string,
 		pipeMessage:    false,
 		pipeBuffer:     list.New(),
 		pipe:           make(Botpipe),
+		scheduler:      NewScheduler(),
 	}
 
 	//. logger
@@ -169,8 +171,10 @@ func (bot *IRCBot) JoinDefault() {
 }
 
 func (bot *IRCBot) Pong(server string) {
-	bot.Send(fmt.Sprintf("PONG %s", server))
-	bot.Log(">> PONG !")
+	//bot.Send(fmt.Sprintf("PONG %s", server))
+	//bot.Log(">> PONG !")
+	event := NewMsgEvent(bot, fmt.Sprintf("PONG %s", server))
+	bot.scheduler.AddHigh(event)
 }
 
 func (bot *IRCBot) Reply(target, message string) {
@@ -178,20 +182,26 @@ func (bot *IRCBot) Reply(target, message string) {
 }
 
 func (bot *IRCBot) Notice(target, message string) {
-	bot.Send("NOTICE %s :%s", target, message)
+	//bot.Send("NOTICE %s :%s", target, message)
+	event := NewMsgEvent(bot, fmt.Sprintf("NOTICE %s :%s", target, message))
+	bot.scheduler.AddHigh(event)
 }
 
 func (bot *IRCBot) Say(channel, message string) {
-	msg := fmt.Sprintf("PRIVMSG %s :%s", channel, message)
+	//msg := fmt.Sprintf("PRIVMSG %s :%s", channel, message)
 	//bot.noises.PushFront(msg)
-	bot.Send(msg)
+	//bot.Send(msg)
+	event := NewMsgEvent(bot, fmt.Sprintf("PRIVMSG %s :%s", channel, message))
+	bot.scheduler.AddLow(event)
 }
 
 // see: http://www.irchelp.org/irchelp/rfc/ctcpspec.html
 func (bot *IRCBot) Action(channel, message string) {
-	msg := fmt.Sprintf("PRIVMSG %s :\001ACTION %s\001", channel, message)
+	//msg := fmt.Sprintf("PRIVMSG %s :\001ACTION %s\001", channel, message)
 	//bot.noises.PushFront(msg)
-	bot.Send(msg)
+	//bot.Send(msg)
+	event := NewMsgEvent(bot, fmt.Sprintf("PRIVMSG %s :\001ACTION %s\001", channel, message))
+	bot.scheduler.AddLow(event)
 }
 
 func (bot *IRCBot) readLine() (string, error) {
@@ -311,17 +321,20 @@ func (bot *IRCBot) Launch() {
 		go bot.listen()
 		//go bot.makeNoise()
 		go bot.makePipe()
+		go bot.scheduler.Run()
 		bot.Link()
 	}
 }
 
 func (bot *IRCBot) Debug() {
-	fmt.Printf("%v Bot: %v, NumGoroutine: %v, pipeMessage: %v, pipeBuffer: %v, noises: %v\n",
+	fmt.Printf("%v Bot: %v, NumGoroutine: %v, pBuffer: %v, noises: %v, eHigh: %v, eLow: %v\n",
 		time.Now().Format(time.RFC3339),
 		bot.nickname,
 		runtime.NumGoroutine(),
-		bot.pipeMessage,
 		bot.pipeBuffer.Len(),
 		bot.noises.Len(),
+		len(bot.scheduler.highPriority),
+		len(bot.scheduler.lowPriority),
 	)
+
 }
